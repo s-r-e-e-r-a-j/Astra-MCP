@@ -1,0 +1,74 @@
+# Developer: Sreeraj
+# GitHub: https://github.com/s-r-e-e-r-a-j
+
+import asyncio
+import os
+import shutil
+from pathlib import Path
+
+from astra_mcp.config import ServerConfig, ToolConfig
+from astra_mcp.policy import expand_argument, validate_arguments, validate_host, validate_path, validate_url_host
+from astra_mcp.audit import write_audit
+
+
+class ToolExecutor:
+    def __init__(self, config: ServerConfig) -> None:
+        self.config = config
+        self.semaphore = asyncio.Semaphore(config.max_concurrency)
+
+    def _build(self, tool: ToolConfig, raw_arguments: object) -> tuple[list[str], str | None]:
+        arguments = validate_arguments(tool, raw_arguments)
+        executable = shutil.which(tool.executable) if not Path(tool.executable).is_absolute() else tool.executable
+        if not executable or not Path(executable).is_file():
+            raise FileNotFoundError(f"Executable not found: {tool.executable}")
+        command = [executable]
+        for template in tool.fixed_args:
+            expanded = expand_argument(template, arguments)
+            for parameter in tool.parameters:
+                if parameter.kind == "string" and parameter.name in arguments:
+                    value = str(arguments[parameter.name])
+                    if "{"+parameter.name+"}" in template and parameter.name in {"path", "file", "directory", "repo", "output"}:
+                        if parameter.name == "output" and not tool.allowed_paths:
+                            raise ValueError("Output paths require configured allowed_paths")
+                        if tool.allowed_paths:
+                            validate_path(value, tool.allowed_paths)
+                    if "{"+parameter.name+"}" in template and parameter.name in {"url", "uri"}:
+                        validate_url_host(value, tool.allowed_hosts)
+                    if "{"+parameter.name+"}" in template and parameter.name in {"target", "host"}:
+                        validate_host(value, tool.allowed_hosts)
+            command.append(expanded)
+        working_directory = None
+        if tool.working_directory:
+            working_directory = expand_argument(tool.working_directory, arguments)
+            working_directory = str(validate_path(working_directory, tool.allowed_paths))
+        return command, working_directory
+
+    async def run(self, tool: ToolConfig, raw_arguments: object) -> dict[str, object]:
+        if not tool.enabled:
+            raise PermissionError(f"Tool is disabled: {tool.name}")
+        command, working_directory = self._build(tool, raw_arguments)
+        async with self.semaphore:
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    cwd=working_directory,
+                    stdin=asyncio.subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env={key: value for key, value in os.environ.items() if key in {"PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM"}},
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=tool.timeout_seconds)
+                except TimeoutError:
+                    process.kill()
+                    await process.communicate()
+                    raise TimeoutError(f"Tool timed out after {tool.timeout_seconds} seconds")
+                limit = self.config.max_output_bytes
+                output = stdout[:limit].decode("utf-8", errors="replace")
+                error = stderr[:limit].decode("utf-8", errors="replace")
+                result = {"exit_code": process.returncode, "stdout": output, "stderr": error, "truncated": len(stdout) > limit or len(stderr) > limit}
+                write_audit(self.config.audit_log, {"tool": tool.name, "arguments": raw_arguments, "exit_code": process.returncode})
+                return result
+            except Exception as error:
+                write_audit(self.config.audit_log, {"tool": tool.name, "arguments": raw_arguments, "error": type(error).__name__})
+                raise

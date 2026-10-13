@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "astra-mcp"
+version = "0.1.0"
+description = "Configuration-driven MCP server for command-line tools on Linux"
+requires-python = ">=3.13"
+dependencies = ["mcp>=1.9.0,<2.0.0"]
+
+
+[project.scripts]
+astra = "astra_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra_mcp"]
+

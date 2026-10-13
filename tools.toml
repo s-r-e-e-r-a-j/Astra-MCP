@@ -1,0 +1,49 @@
+[server]
+default_timeout_seconds = 30
+max_timeout_seconds = 120
+max_output_bytes = 200000
+max_concurrency = 4
+audit_log = "./audit.jsonl"
+
+[[tools]]
+name = "git_status"
+description = "Show status for a configured repository path."
+executable = "git"
+enabled = false
+timeout_seconds = 10
+working_directory = "{repo}"
+fixed_args = ["status", "--short"]
+parameters = { repo = { type = "string", description = "Repository directory", required = true } }
+allowed_paths = ["/home/kali/Desktop"]
+
+[[tools]]
+name = "curl_headers"
+description = "Fetch response headers from a URL. Enable only for approved destinations."
+executable = "curl"
+enabled = false
+timeout_seconds = 15
+fixed_args = ["--head", "--fail", "--max-time", "10", "{url}"]
+parameters = { url = { type = "string", description = "HTTP or HTTPS URL", required = true } }
+allowed_paths = []
+allowed_hosts = []
+
+[[tools]]
+name = "hostname"
+description = "Print the system hostname."
+executable = "hostname"
+enabled = true
+timeout_seconds = 5
+fixed_args = []
+parameters = {}
+allowed_paths = []
+
+[[tools]]
+name = "nmap"
+description = "Network Mapper"
+executable = "nmap"
+enabled = true
+timeout_seconds = 30
+fixed_args = ["-sT", "-p", "{ports}", "{target}"]
+parameters = { ports = { type = "string", description = "Port or comma-separated ports to scan", required = true }, target = { type = "string", description = "hostname or IP address", required = true } }
+allowed_paths = []
+allowed_hosts = ["scanme.nmap.org"]
