@@ -176,7 +176,7 @@ enabled = true
 timeout_seconds = 10
 working_directory = "{repo}"
 fixed_args = ["log", "-n", "{count}", "--format={format}"]
-parameters = {repo = { type = "string", description = "Repository path", required = true }, count = { type = "integer", description = "Number of commits to show", required = true },format = { type = "string", description = "Git log output format", required = true }}
+parameters = {repo = { type = "string", description = "Repository path", required = true }, count = { type = "integer", description = "Number of commits to show", required = true }, format = { type = "string", description = "Git log output format", required = true }}
 allowed_paths = ["/home/your-user/projects"]
 ```
 
