@@ -51,14 +51,14 @@ python -m pip install -e .
 
 These commands create a virtual environment, turn it on, update `pip`, and install ASTRA.
 
+If the `python3.13` command is not available, install Python 3.13 or a newer version first. ASTRA requires Python 3.13 or newer.
+
 Check that ASTRA is installed by running:
 
 ```bash
 astra --help
 astra --version
 ```
-
-If the `python3.13` command is not available, install Python 3.13 or a newer version first. ASTRA requires Python 3.13 or newer.
 
 ## 3. Choose the configuration file
 
