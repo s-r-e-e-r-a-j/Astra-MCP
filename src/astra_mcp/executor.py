@@ -43,6 +43,67 @@ class ToolExecutor:
             working_directory = str(validate_path(working_directory, tool.allowed_paths))
         return command, working_directory
 
+    async def run_dynamic(self, raw_arguments: object) -> dict[str, object]:
+        if not self.config.enable_dynamic_command_tool:
+            raise PermissionError("Dynamic command execution is disabled")
+        if not isinstance(raw_arguments, dict):
+            raise ValueError("Arguments must be an object")
+        if set(raw_arguments) - {"executable", "args"}:
+            raise ValueError("Only executable and args are accepted")
+        executable_value = raw_arguments.get("executable")
+        args_value = raw_arguments.get("args", [])
+        if not isinstance(executable_value, str) or not executable_value.strip():
+            raise ValueError("executable must be a non-empty string")
+        if not isinstance(args_value, list) or not all(isinstance(arg, str) for arg in args_value):
+            raise ValueError("args must be a list of strings")
+        values = [executable_value, *args_value]
+        if any("\x00" in value or "\r" in value or "\n" in value for value in values):
+            raise ValueError("Command arguments cannot contain NUL or newline characters")
+        executable = (executable_value if Path(executable_value).is_absolute()
+                      else shutil.which(executable_value))
+        if not executable or not Path(executable).is_file():
+            raise FileNotFoundError(f"Executable not found: {executable_value}")
+        command = [executable, *args_value]
+        async with self.semaphore:
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    cwd=None,
+                    stdin=asyncio.subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env={key: value for key, value in os.environ.items()
+                         if key in {"PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM"}},
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(), timeout=self.config.default_timeout_seconds
+                    )
+                except TimeoutError:
+                    process.kill()
+                    await process.communicate()
+                    raise TimeoutError(
+                        f"Dynamic command timed out after {self.config.default_timeout_seconds} seconds"
+                    )
+                limit = self.config.max_output_bytes
+                result = {
+                    "exit_code": process.returncode,
+                    "stdout": stdout[:limit].decode("utf-8", errors="replace"),
+                    "stderr": stderr[:limit].decode("utf-8", errors="replace"),
+                    "truncated": len(stdout) > limit or len(stderr) > limit,
+                }
+                write_audit(self.config.audit_log, {
+                    "tool": "run_command", "executable": executable_value,
+                    "args": args_value, "exit_code": process.returncode,
+                })
+                return result
+            except Exception as error:
+                write_audit(self.config.audit_log, {
+                    "tool": "run_command", "executable": executable_value,
+                    "args": args_value, "error": type(error).__name__,
+                })
+                raise
+
     async def run(self, tool: ToolConfig, raw_arguments: object) -> dict[str, object]:
         if not tool.enabled:
             raise PermissionError(f"Tool is disabled: {tool.name}")

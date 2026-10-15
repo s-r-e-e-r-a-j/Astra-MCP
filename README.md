@@ -1,14 +1,15 @@
 # ASTRA MCP
 
-ASTRA is an MCP server. It lets an AI assistant run command-line programs that you choose on your Linux computer.
+ASTRA is an MCP server that lets an AI assistant run programs on your Linux computer.
 
-You choose which programs ASTRA can use in the `tools.toml` file.
+You can set up specific tools in `tools.toml`. ASTRA also has an optional `run_command` tool that lets the AI choose a program and provide its command-line arguments when it calls the tool.
 
 ASTRA reads this file and creates one MCP tool for each enabled tool. It also creates a JSON input schema from the settings you provide. When the AI calls a tool, ASTRA checks the input, runs the program without using a shell, and returns the result.
 
 ## Features
 
 - Add command-line tools in `tools.toml`. You do not need to write a separate Python wrapper for every program.
+- Optionally expose a generic `run_command` MCP tool so the AI can choose an executable and provide an argument list at call time, without defining a separate tool schema for each command.
 - Show enabled tools to an AI client that supports MCP.
 - Create JSON schemas from the parameters you set for each tool.
 - Check required inputs, data types, unknown input names, and some unsafe characters.
@@ -83,7 +84,9 @@ Use an absolute path in your MCP client settings. This helps ASTRA find the file
 
 ASTRA uses MCP **stdio** transport. This means the MCP client starts ASTRA as a program and communicates with it through standard input and standard output.
 
-When a tool is called, the AI sends arguments in JSON format. ASTRA checks the arguments against the tool's parameter settings, fills in placeholders in `fixed_args`, and starts the program with each argument kept separate. ASTRA does not run the command through a shell.
+For tools defined in `tools.toml`, the AI sends arguments in JSON format. ASTRA checks the arguments against each tool's parameter settings, fills in placeholders in `fixed_args`, and starts the program with each argument kept separate. ASTRA does not run these commands through a shell.
+
+You can also enable `run_command` by setting `enable_dynamic_command_tool = true` in the `[server]` section of `tools.toml`. The AI can then choose a program and send its arguments in an `args` list. You do not need to add a separate tool entry for every program. For example, `executable = "git"` and `args = ["status", "--short"]` run `git status --short`.
 
 While the MCP server is running, do not send normal print messages or debug messages to standard output. They can interfere with communication between ASTRA and the MCP client.
 
@@ -98,6 +101,7 @@ max_timeout_seconds = 120
 max_output_bytes = 200000
 max_concurrency = 4
 audit_log = "./audit.jsonl"
+enable_dynamic_command_tool = false
 ```
 
 | Setting | What it means |
@@ -107,6 +111,7 @@ audit_log = "./audit.jsonl"
 | `max_output_bytes` | The maximum number of bytes ASTRA keeps from standard output and standard error in the returned result. The limit applies separately to each one. The value must be at least `1`. ASTRA currently captures all process output before cutting it down, so this setting does not fully limit memory use. |
 | `max_concurrency` | The maximum number of tool calls ASTRA allows to run at the same time. The value must be at least `1`. |
 | `audit_log` | The file where ASTRA adds audit records in JSON-lines format. By default, this is `./audit.jsonl`. ASTRA creates the parent folder if it does not already exist. |
+| `enable_dynamic_command_tool` | When `true`, exposes the generic `run_command` tool. When `false` or omitted, the tool is disabled. |
 
 To choose a different audit-log file, set `ASTRA_MCP_AUDIT_LOG`:
 
@@ -117,6 +122,24 @@ export ASTRA_MCP_AUDIT_LOG='/absolute/path/to/audit.jsonl'
 When this environment variable is set, it takes priority over `audit_log` in `tools.toml`.
 
 Audit records may include tool names and arguments. Keep the log safe if those values could contain private information.
+
+### Optional dynamic command tool
+
+By default, ASTRA exposes only the individual tools you define in `[[tools]]` sections. To let the AI select an executable and supply arbitrary command-line arguments at call time, enable the generic tool in the `[server]` section:
+
+```toml
+[server]
+enable_dynamic_command_tool = true
+```
+
+When enabled, the MCP client is shown a `run_command` tool with these inputs:
+
+- `executable`: the program to launch, such as `git` or `hostname`.
+- `args`: a list of arguments, each passed as a separate argument to the program. Use `[]` when no arguments are needed.
+
+For example, a call to `run_command` could supply `executable = "git"` and `args = ["status", "--short"]`. Unlike configured tools, you do not need to add a new `[[tools]]` section or predefine placeholders for each command.
+
+
 
 ## 6. Configure tools in `tools.toml`
 

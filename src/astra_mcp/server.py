@@ -1,3 +1,4 @@
+
 # Developer: Sreeraj
 # GitHub: https://github.com/s-r-e-e-r-a-j
 
@@ -45,14 +46,41 @@ def create_server(config_path: str | Path | None = None) -> Server:
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        return [
+        tools = [
             Tool(name=tool.name, description=tool.description, inputSchema=json_schema(tool))
             for tool in config.tools
             if tool.enabled
         ]
+        if config.enable_dynamic_command_tool:
+            tools.append(Tool(
+                name="run_command",
+                description=(
+                    "Run an installed executable with model-selected arguments and flags. "
+                    "Pass the executable separately and every argument as one string in args. "
+                    "Arguments are passed directly without shell parsing."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "executable": {"type": "string", "description": "Executable name on PATH or absolute executable path."},
+                        "args": {"type": "array", "items": {"type": "string"}, "description": "Arguments and flags, one string per argument."},
+                    },
+                    "required": ["executable", "args"],
+                    "additionalProperties": False,
+                },
+            ))
+        return tools
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, object]) -> list[TextContent]:
+        if name == "run_command":
+            if not config.enable_dynamic_command_tool:
+                return [TextContent(type="text", text=json.dumps({"error": "Dynamic command execution is disabled"}))]
+            try:
+                result = await executor.run_dynamic(arguments)
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+            except Exception as error:
+                return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
         tool = next((item for item in config.tools if item.name == name), None)
         if tool is None:
             return [TextContent(type="text", text=json.dumps({"error": "Unknown tool"}))]

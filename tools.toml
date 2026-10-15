@@ -3,6 +3,7 @@ default_timeout_seconds = 30
 max_timeout_seconds = 120
 max_output_bytes = 200000
 max_concurrency = 4
+enable_dynamic_command_tool = false
 audit_log = "./audit.jsonl"
 
 [[tools]]
