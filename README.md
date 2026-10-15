@@ -1,10 +1,10 @@
 # ASTRA MCP
 
-ASTRA is an MCP server that lets an AI assistant run programs on your Linux computer.
+ASTRA is an MCP server. It lets an AI assistant run command-line programs on your Linux computer.
 
-You can set up specific tools in `tools.toml`. ASTRA also has an optional `run_command` tool that lets the AI choose a program and provide its command-line arguments when it calls the tool.
+You can configure specific tools in `tools.toml`. ASTRA also has an optional `run_command` tool that lets the AI choose a program and provide its command-line arguments when calling the tool.
 
-ASTRA reads this file and creates one MCP tool for each enabled tool. It also creates a JSON input schema from the settings you provide. When the AI calls a tool, ASTRA checks the input, runs the program without using a shell, and returns the result.
+For configured tools, ASTRA creates an MCP tool and a JSON input schema based on the settings in `tools.toml`. When the AI calls a tool, ASTRA checks the input, runs the program without using a shell, and returns the result.
 
 ## Features
 
