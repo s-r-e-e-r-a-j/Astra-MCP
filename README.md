@@ -262,6 +262,8 @@ An allowed-host list is not a firewall. It also cannot protect against every DNS
 5. Set `enabled = true` after checking the command and its configuration.
 6. Restart ASTRA after you change `tools.toml`. The changes take effect after ASTRA restarts.
 
+If `run_command` is enabled, you can also use it to run different programs by providing the executable and its arguments. You do not need to add a separate `[[tools]]` entry for each program.
+
 ## 10. Connect an MCP client
 
 ASTRA uses stdio, so your MCP client must start the ASTRA executable. The exact setup steps depend on the MCP client, but you will usually need these settings:
