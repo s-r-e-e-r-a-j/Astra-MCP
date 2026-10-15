@@ -100,8 +100,8 @@ default_timeout_seconds = 30
 max_timeout_seconds = 120
 max_output_bytes = 200000
 max_concurrency = 4
-audit_log = "./audit.jsonl"
 enable_dynamic_command_tool = false
+audit_log = "./audit.jsonl"
 ```
 
 | Setting | What it means |
@@ -110,8 +110,8 @@ enable_dynamic_command_tool = false
 | `max_timeout_seconds` | The longest time a tool is allowed to run. The value must be at least `1`. A tool's own timeout cannot be higher than this value. |
 | `max_output_bytes` | The maximum number of bytes ASTRA keeps from standard output and standard error in the returned result. The limit applies separately to each one. The value must be at least `1`. ASTRA currently captures all process output before cutting it down, so this setting does not fully limit memory use. |
 | `max_concurrency` | The maximum number of tool calls ASTRA allows to run at the same time. The value must be at least `1`. |
-| `audit_log` | The file where ASTRA adds audit records in JSON-lines format. By default, this is `./audit.jsonl`. ASTRA creates the parent folder if it does not already exist. |
 | `enable_dynamic_command_tool` | When `true`, exposes the generic `run_command` tool. When `false` or omitted, the tool is disabled. |
+| `audit_log` | The file where ASTRA adds audit records in JSON-lines format. By default, this is `./audit.jsonl`. ASTRA creates the parent folder if it does not already exist. |
 
 To choose a different audit-log file, set `ASTRA_MCP_AUDIT_LOG`:
 
