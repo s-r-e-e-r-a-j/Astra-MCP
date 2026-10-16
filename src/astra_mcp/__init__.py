@@ -2,4 +2,4 @@
 # Developer: Sreeraj
 # GitHub: https://github.com/s-r-e-e-r-a-j
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

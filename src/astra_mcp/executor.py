@@ -104,6 +104,78 @@ class ToolExecutor:
                 })
                 raise
 
+    async def run_shell(self, raw_arguments: object) -> dict[str, object]:
+        if not self.config.enable_shell_tool:
+            raise PermissionError("Shell execution is disabled")
+        if not isinstance(raw_arguments, dict):
+            raise ValueError("Arguments must be an object")
+        if set(raw_arguments) - {"script", "cwd"}:
+            raise ValueError("Only script and cwd are accepted")
+        script = raw_arguments.get("script")
+        cwd_value = raw_arguments.get("cwd")
+        if not isinstance(script, str) or not script.strip():
+            raise ValueError("script must be a non-empty string")
+        if "\\x00" in script:
+            raise ValueError("Shell script cannot contain NUL characters")
+        if cwd_value is not None and not isinstance(cwd_value, str):
+            raise ValueError("cwd must be a string when provided")
+
+        shell = self.config.shell_executable
+        shell_path = shell if Path(shell).is_absolute() else shutil.which(shell)
+        if not shell_path or not Path(shell_path).is_file():
+            raise FileNotFoundError(f"Shell executable not found: {shell}")
+        cwd = None
+        if cwd_value:
+            cwd = str(Path(cwd_value).expanduser().resolve())
+            if not Path(cwd).is_dir():
+                raise NotADirectoryError(f"Working directory not found: {cwd}")
+
+        env = {key: value for key, value in os.environ.items()
+               if key in {"PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR"}}
+        async with self.semaphore:
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    shell_path, "-c", script,
+                    cwd=cwd,
+                    stdin=asyncio.subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                    start_new_session=True,
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(), timeout=self.config.default_timeout_seconds
+                    )
+                except TimeoutError:
+                    try:
+                        os.killpg(process.pid, 9)
+                    except (ProcessLookupError, PermissionError):
+                        process.kill()
+                    await process.communicate()
+                    raise TimeoutError(
+                        f"Shell command timed out after {self.config.default_timeout_seconds} seconds"
+                    )
+                limit = self.config.max_output_bytes
+                result = {
+                    "exit_code": process.returncode,
+                    "stdout": stdout[:limit].decode("utf-8", errors="replace"),
+                    "stderr": stderr[:limit].decode("utf-8", errors="replace"),
+                    "truncated": len(stdout) > limit or len(stderr) > limit,
+                    "shell": Path(shell_path).name,
+                }
+                write_audit(self.config.audit_log, {
+                    "tool": "run_shell", "script": script, "cwd": cwd,
+                    "exit_code": process.returncode,
+                })
+                return result
+            except Exception as error:
+                write_audit(self.config.audit_log, {
+                    "tool": "run_shell", "script": script, "cwd": cwd,
+                    "error": type(error).__name__,
+                })
+                raise
+
     async def run(self, tool: ToolConfig, raw_arguments: object) -> dict[str, object]:
         if not tool.enabled:
             raise PermissionError(f"Tool is disabled: {tool.name}")

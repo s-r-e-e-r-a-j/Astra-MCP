@@ -36,6 +36,8 @@ class ServerConfig:
     max_output_bytes: int
     max_concurrency: int
     enable_dynamic_command_tool: bool
+    enable_shell_tool: bool
+    shell_executable: str
     audit_log: str
     tools: tuple[ToolConfig, ...]
 
@@ -120,6 +122,8 @@ def load_config(path: str | Path) -> ServerConfig:
         max_output_bytes=max_output,
         max_concurrency=max_concurrency,
         enable_dynamic_command_tool=bool(server.get("enable_dynamic_command_tool", False)),
+        enable_shell_tool=bool(server.get("enable_shell_tool", False)),
+        shell_executable=str(server.get("shell_executable", "/bin/bash")),
         audit_log=os.environ.get("ASTRA_MCP_AUDIT_LOG", str(server.get("audit_log", "./audit.jsonl"))),
         tools=tuple(tools),
     )

@@ -69,10 +69,37 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "additionalProperties": False,
                 },
             ))
+        if config.enable_shell_tool:
+            tools.append(Tool(
+                name="run_shell",
+                description=(
+                    "Execute a complete script using the configured shell. Supports shell syntax "
+                    "such as &&, ||, ;, pipes, redirection, variables, quoting, globbing, "
+                    "subshells, command substitution, loops, functions, and shell built-ins. "
+                    "This tool executes commands on the host system."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "script": {"type": "string", "description": "Full shell script to execute."},
+                        "cwd": {"type": "string", "description": "Optional working directory."},
+                    },
+                    "required": ["script"],
+                    "additionalProperties": False,
+                },
+            ))
         return tools
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, object]) -> list[TextContent]:
+        if name == "run_shell":
+            if not config.enable_shell_tool:
+                return [TextContent(type="text", text=json.dumps({"error": "Shell execution is disabled"}))]
+            try:
+                result = await executor.run_shell(arguments)
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+            except Exception as error:
+                return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
         if name == "run_command":
             if not config.enable_dynamic_command_tool:
                 return [TextContent(type="text", text=json.dumps({"error": "Dynamic command execution is disabled"}))]

@@ -2,14 +2,23 @@
 
 ASTRA is an MCP server. It lets an AI assistant run command-line programs on your Linux computer.
 
-You can configure specific tools in `tools.toml`. ASTRA also has an optional `run_command` tool that lets the AI choose a program and provide its command-line arguments when calling the tool.
+ASTRA supports three ways to run commands:
 
-For configured tools, ASTRA creates an MCP tool and a JSON input schema based on the settings in `tools.toml`. When the AI calls a tool, ASTRA checks the input, runs the program without using a shell, and returns the result.
+- **Configured tools:** You define each tool in `tools.toml`. ASTRA runs the program with separate command-line arguments, without using a shell.
+- **`run_command`:** An optional tool that lets the AI choose a program and provide its command-line arguments, without using a shell.
+- **`run_shell`:** An optional tool that lets the AI run shell scripts. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables.
+
+Both `run_command` and `run_shell` are disabled by default. You can enable each tool separately in the `[server]` section of `tools.toml`.
+
+For configured tools, ASTRA reads the settings in `tools.toml` and creates an MCP tool with a matching JSON input schema. When the AI calls a tool, ASTRA checks the input, runs the command, and returns the result.
 
 ## Features
 
 - Add command-line tools in `tools.toml`. You do not need to write a separate Python wrapper for every program.
 - Optionally expose a generic `run_command` MCP tool so the AI can choose an executable and provide an argument list at call time, without defining a separate tool schema for each command.
+- Optionally enable `run_shell` so the AI can run shell scripts and combine commands.
+- Use shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables when using `run_shell`.
+- Choose which shell ASTRA uses with the `shell_executable` setting.
 - Show enabled tools to an AI client that supports MCP.
 - Create JSON schemas from the parameters you set for each tool.
 - Check required inputs, data types, unknown input names, and some unsafe characters.
@@ -88,6 +97,8 @@ For tools defined in `tools.toml`, the AI sends arguments in JSON format. ASTRA 
 
 You can also enable `run_command` by setting `enable_dynamic_command_tool = true` in the `[server]` section of `tools.toml`. The AI can then choose a program and send its arguments in an `args` list. You do not need to add a separate tool entry for every program. For example, `executable = "git"` and `args = ["status", "--short"]` run `git status --short`.
 
+You can enable the optional `run_shell` tool by setting `enable_shell_tool = true` in the `[server]` section of `tools.toml`. This lets the AI run shell scripts using the shell specified by `shell_executable`. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables. The tool is disabled by default.
+
 While the MCP server is running, do not send normal print messages or debug messages to standard output. They can interfere with communication between ASTRA and the MCP client.
 
 ## 5. Configure the `[server]` section
@@ -101,6 +112,8 @@ max_timeout_seconds = 120
 max_output_bytes = 200000
 max_concurrency = 4
 enable_dynamic_command_tool = false
+enable_shell_tool = false
+shell_executable = "/bin/bash"
 audit_log = "./audit.jsonl"
 ```
 
@@ -111,6 +124,8 @@ audit_log = "./audit.jsonl"
 | `max_output_bytes` | The maximum number of bytes ASTRA keeps from standard output and standard error in the returned result. The limit applies separately to each one. The value must be at least `1`. ASTRA currently captures all process output before cutting it down, so this setting does not fully limit memory use. |
 | `max_concurrency` | The maximum number of tool calls ASTRA allows to run at the same time. The value must be at least `1`. |
 | `enable_dynamic_command_tool` | When `true`, exposes the generic `run_command` tool. When `false` or omitted, the tool is disabled. |
+| `enable_shell_tool` | When `true`, enables the `run_shell` tool. When `false` or omitted, the tool is disabled. |
+| `shell_executable` | The shell ASTRA uses to run shell scripts. The default is `/bin/bash`. |
 | `audit_log` | The file where ASTRA adds audit records in JSON-lines format. By default, this is `./audit.jsonl`. ASTRA creates the parent folder if it does not already exist. |
 
 To choose a different audit-log file, set `ASTRA_MCP_AUDIT_LOG`:
@@ -139,7 +154,15 @@ When enabled, the MCP client is shown a `run_command` tool with these inputs:
 
 For example, a call to `run_command` could supply `executable = "git"` and `args = ["status", "--short"]`. Unlike configured tools, you do not need to add a new `[[tools]]` section or predefine placeholders for each command.
 
+### Optional shell tool
 
+By default, the `run_shell` tool is disabled. To enable it, set `enable_shell_tool = true` in the `[server]` section of `tools.toml`.
+
+You can choose which shell ASTRA uses by setting `shell_executable`. The default is `/bin/bash`.
+
+When enabled, the MCP client is shown a `run_shell` tool that lets the AI run shell scripts. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables.
+
+**Security note:** Shell scripts can run commands with the same operating-system permissions as ASTRA. They may read, change, or delete files that ASTRA's user can access. Enable this tool only if you trust the commands the AI may run.
 
 ## 6. Configure tools in `tools.toml`
 
@@ -263,6 +286,8 @@ An allowed-host list is not a firewall. It also cannot protect against every DNS
 6. Restart ASTRA after you change `tools.toml`. The changes take effect after ASTRA restarts.
 
 You can also enable the `run_command` tool by setting `enable_dynamic_command_tool = true` in the `[server]` section of `tools.toml`. Once enabled, the AI can choose an executable and provide its arguments when calling the tool, without requiring a separate `[[tools]]` entry for each program.
+
+You can enable the `run_shell` tool by setting `enable_shell_tool = true` in the `[server]` section of `tools.toml`. This lets the AI run shell scripts without adding a separate `[[tools]]` entry. Set `shell_executable` to choose the shell ASTRA uses. Restart ASTRA after changing these settings.
 
 ## 10. Connect an MCP client
 
