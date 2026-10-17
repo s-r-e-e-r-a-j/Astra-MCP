@@ -51,6 +51,69 @@ def create_server(config_path: str | Path | None = None) -> Server:
             for tool in config.tools
             if tool.enabled
         ]
+
+        if config.enable_interactive_command_tool:
+            tools.extend([
+                Tool(
+                    name="start_command",
+                    description=(
+                        "Start an opt-in interactive command session. when a command may ask "
+                        "one or more questions. Returns a session_id. Use read_output to inspect "
+                        "prompts and send_input to provide answers. This feature is controlled independently "
+                        "of generic run_command execution."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "executable": {"type": "string", "description": "Executable name on PATH or absolute executable path."},
+                            "args": {"type": "array", "items": {"type": "string"}, "description": "Arguments, one string per argument."},
+                            "cwd": {"type": "string", "description": "Optional working directory."},
+                        },
+                        "required": ["executable", "args"],
+                        "additionalProperties": False,
+                    },
+                ),
+                Tool(
+                    name="read_output",
+                    description="Read new output from an interactive command session and check whether it has finished.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command."}},
+                        "required": ["session_id"],
+                        "additionalProperties": False,
+                    },
+                ),
+                Tool(
+                    name="send_input",
+                    description=(
+                        "Send arbitrary text input to a running interactive command session. "
+                        "By default, appends a newline (Enter). Set append_newline=false for "
+                        "raw terminal input without appending a newline. "
+                        "Do not send confirmations for consequential actions without user approval."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {"type": "string", "description": "Session ID returned by start_command."},
+                            "text": {"type": "string", "description": "Text or terminal input to send."},
+                            "append_newline": {"type": "boolean", "description": "Append Enter after the input (default true)."},
+                        },
+                        "required": ["session_id", "text"],
+                        "additionalProperties": False,
+                    },
+                ),
+                Tool(
+                    name="stop_command",
+                    description="Stop an interactive command session and release its resources.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command."}},
+                        "required": ["session_id"],
+                        "additionalProperties": False,
+                    },
+                ),
+            ])
+
         if config.enable_dynamic_command_tool:
             tools.append(Tool(
                 name="run_command",
@@ -69,6 +132,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "additionalProperties": False,
                 },
             ))
+
         if config.enable_shell_tool:
             tools.append(Tool(
                 name="run_shell",
@@ -92,6 +156,20 @@ def create_server(config_path: str | Path | None = None) -> Server:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, object]) -> list[TextContent]:
+        interactive_methods = {
+            "start_command": executor.start_command,
+            "read_output": executor.read_output,
+            "send_input": executor.send_input,
+            "stop_command": executor.stop_command,
+        }
+        if name in interactive_methods:
+            if not config.enable_interactive_command_tool:
+                return [TextContent(type="text", text=json.dumps({"error": "Interactive command execution is disabled"}))]
+            try:
+                result = await interactive_methods[name](arguments)
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+            except Exception as error:
+                return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
         if name == "run_shell":
             if not config.enable_shell_tool:
                 return [TextContent(type="text", text=json.dumps({"error": "Shell execution is disabled"}))]
