@@ -7,7 +7,7 @@ ASTRA supports four ways to run commands:
 - **Configured tools:** You define each tool in `tools.toml`. ASTRA runs the program with separate command-line arguments, without using a shell.
 - **`run_command`:** An optional tool that lets the AI choose a program and provide its command-line arguments, without using a shell.
 - **`run_shell`:** An optional tool that lets the AI run shell scripts. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables.
-- **Interactive commands:** An optional feature that lets the AI dynamically choose an executable and provide its command-line arguments through `start_command`. The AI can also specify an optional working directory using `cwd`. It can then read output using `read_output`, send input using `send_input`, and stop the program using `stop_command`. These tools use a session ID to interact with the same running process. Interactive command tools are disabled by default and can be enabled in the `[server]` section of `tools.toml`.
+- **Interactive commands:** An optional feature that lets the AI dynamically choose an executable and provide its command-line arguments through `start_command`. The AI can also specify an optional working directory using `cwd`. It can then read output using `read_output`, send input using `send_input`, and stop the program using `stop_command`. These tools use a session ID to interact with the same running process.
 
 The `run_command`, `run_shell`, and interactive command features are disabled by default. You can enable each feature separately in the `[server]` section of `tools.toml`.
 
