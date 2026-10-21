@@ -97,6 +97,73 @@ class ToolExecutor:
         })
         return {"session_id": session_id, "status": "running", "message": "Use read_output to inspect output and send_input to answer prompts."}
 
+    async def run_interactive_shell(self, raw_arguments: object) -> dict[str, object]:
+        if not self.config.enable_interactive_shell_tool:
+            raise PermissionError("Interactive shell execution is disabled in tools.toml")
+        if not isinstance(raw_arguments, dict) or set(raw_arguments) - {"script", "cwd"}:
+            raise ValueError("Only script and cwd are accepted")
+        script = raw_arguments.get("script")
+        cwd_value = raw_arguments.get("cwd")
+        if not isinstance(script, str) or not script.strip():
+            raise ValueError("script must be a non-empty string")
+        if "\x00" in script:
+            raise ValueError("script cannot contain NUL characters")
+        if cwd_value is not None and not isinstance(cwd_value, str):
+            raise ValueError("cwd must be a string when provided")
+        shell = self.config.shell_executable
+        executable = shell if Path(shell).is_absolute() else shutil.which(shell)
+        if not executable or not Path(executable).is_file():
+            raise FileNotFoundError(f"Shell executable not found: {shell}")
+        cwd = None
+        if cwd_value:
+            cwd = str(Path(cwd_value).expanduser().resolve())
+            if not Path(cwd).is_dir():
+                raise NotADirectoryError(f"Working directory not found: {cwd}")
+        if len(self._interactive_sessions) >= self._interactive_session_limit:
+            raise RuntimeError("Interactive session limit reached. stop or finish an existing session first")
+
+        master_fd, slave_fd = pty.openpty()
+        try:
+            flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+            fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            env = {key: value for key, value in os.environ.items()
+                   if key in {"PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR"}}
+            env.setdefault("TERM", "xterm")
+            async with self.semaphore:
+                process = await asyncio.create_subprocess_exec(
+                    executable, "-c", script, cwd=cwd,
+                    stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+                    env=env, start_new_session=True,
+                )
+        except Exception:
+            os.close(master_fd)
+            os.close(slave_fd)
+            raise
+        finally:
+            try:
+                os.close(slave_fd)
+            except OSError:
+                pass
+
+        session_id = secrets.token_urlsafe(18)
+        session: dict[str, object] = {
+            "process": process, "master_fd": master_fd, "output": bytearray(),
+            "cursor": 0, "truncated": False, "created_at": time.monotonic(),
+            "timed_out": False, "reader_task": None, "watch_task": None,
+            "interactive_shell": True,
+        }
+        self._interactive_sessions[session_id] = session
+        session["reader_task"] = asyncio.create_task(self._read_interactive_output(session_id))
+        session["watch_task"] = asyncio.create_task(self._watch_interactive_process(session_id))
+        write_audit(self.config.audit_log, {
+            "tool": "run_interactive_shell", "session_id": session_id,
+            "script": script, "cwd": cwd,
+        })
+        return {
+            "session_id": session_id, "status": "running",
+            "message": "Interactive shell script started in a PTY. Use read_output to inspect prompts, send_input to type answers or editor keystrokes, and stop_command to end the session.",
+        }
+
     async def _read_interactive_output(self, session_id: str) -> None:
         import errno
         loop = asyncio.get_running_loop()
@@ -142,7 +209,10 @@ class ToolExecutor:
         process = session["process"]
         assert isinstance(process, asyncio.subprocess.Process)
         try:
-            await asyncio.wait_for(process.wait(), timeout=self.config.default_timeout_seconds)
+            if session.get("interactive_shell"):
+                await process.wait()
+            else:
+                await asyncio.wait_for(process.wait(), timeout=self.config.default_timeout_seconds)
         except TimeoutError:
             session["timed_out"] = True
             try:

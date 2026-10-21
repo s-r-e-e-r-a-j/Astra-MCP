@@ -2,14 +2,15 @@
 
 ASTRA is an MCP server. It lets an AI assistant run command-line programs on your Linux computer.
 
-ASTRA supports four ways to run commands:
+ASTRA supports five ways to run commands:
 
 - **Configured tools:** You define each tool in `tools.toml`. ASTRA runs the program with separate command-line arguments, without using a shell.
 - **`run_command`:** An optional tool that lets the AI choose a program and provide its command-line arguments, without using a shell.
 - **`run_shell`:** An optional tool that lets the AI run shell scripts. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables.
 - **Interactive commands:** An optional feature that lets the AI dynamically choose an executable and provide its command-line arguments through `start_command`. The AI can also specify an optional working directory using `cwd`. It can then read output using `read_output`, send input using `send_input`, and stop the program using `stop_command`. These tools use a session ID to interact with the same running process.
+- **`run_interactive_shell`:** An optional tool that lets the AI run shell scripts. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), variables, and more. It runs scripts in an interactive shell session and returns a session ID. The AI can inspect output, respond to prompts, send input to the running script, and stop the process using `read_output`, `send_input`, and `stop_command`. It supports scripts that require interactive input, including terminal menus and editors such as `nano`, `vi`, and `vim`.	
 
-The `run_command`, `run_shell`, and interactive command features are disabled by default. You can enable each feature separately in the `[server]` section of `tools.toml`.
+The `run_command`, `run_shell`, `run_interactive_shell`, and interactive command features are disabled by default. You can enable each feature separately in the `[server]` section of `tools.toml`.
 
 For configured tools, ASTRA reads the settings in `tools.toml` and creates an MCP tool with a matching JSON input schema. When the AI calls a tool, ASTRA checks the input, runs the command, and returns the result.
 
@@ -22,6 +23,7 @@ For configured tools, ASTRA reads the settings in `tools.toml` and creates an MC
 - Choose which shell ASTRA uses with the `shell_executable` setting.
 - **Interactive command sessions:** Optionally enable `start_command`, `read_output`, `send_input`, and `stop_command` to start programs, read their output, send input, and stop running processes using session IDs.
 - **Session management:** Keep interacting with a running process across multiple tool calls without restarting it.
+- **Interactive shell sessions:** Optionally enable `run_interactive_shell` to execute shell scripts that may need input while running. Use the returned session ID with `read_output`, `send_input`, and `stop_command` to interact with the same process.
 - Show enabled tools to an AI client that supports MCP.
 - Create JSON schemas from the parameters you set for each tool.
 - Check required inputs, data types, unknown input names, and some unsafe characters.
@@ -102,6 +104,8 @@ You can also enable `run_command` by setting `enable_dynamic_command_tool = true
 
 You can enable the optional `run_shell` tool by setting `enable_shell_tool = true` in the `[server]` section of `tools.toml`. This lets the AI run shell scripts using the shell specified by `shell_executable`. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables. The tool is disabled by default.
 
+You can enable the optional `run_interactive_shell` tool by setting `enable_interactive_shell_tool = true` in the `[server]` section of `tools.toml`. This tool runs a complete shell script using the shell specified by `shell_executable` and supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), variables, and other shell syntax. Unlike `run_shell`, it runs the script in an interactive shell session and returns a session ID. The AI can use `read_output` to inspect output and prompts, `send_input` to provide input to the running script, and `stop_command` to stop the process and release its resources. These session-control tools work with the session ID returned by `run_interactive_shell`. The interactive shell tool is disabled by default.
+
 You can also enable the optional interactive command tools by setting `enable_interactive_command_tool = true` in the `[server]` section of `tools.toml`. When calling `start_command`, the AI can provide the `executable` to run, an `args` list containing the command-line arguments, and an optional `cwd` working directory. This lets the AI choose the program and its arguments at runtime. The `start_command` tool starts the program and returns a session ID. The AI uses this ID to interact with the same running program through `read_output`, `send_input`, and `stop_command`. These tools let the AI read output, respond to prompts, send more input, and stop the program when finished. The interactive command tools are disabled by default.
 
 While the MCP server is running, do not send normal print messages or debug messages to standard output. They can interfere with communication between ASTRA and the MCP client.
@@ -119,6 +123,7 @@ max_concurrency = 4
 enable_dynamic_command_tool = false
 enable_interactive_command_tool = false
 enable_shell_tool = false
+enable_interactive_shell_tool = false
 shell_executable = "/bin/bash"
 audit_log = "./audit.jsonl"
 ```
@@ -132,6 +137,7 @@ audit_log = "./audit.jsonl"
 | `enable_dynamic_command_tool` | When `true`, exposes the generic `run_command` tool. When `false` or omitted, the tool is disabled. |
 | `enable_interactive_command_tool` | When `true`, enables `start_command`, `read_output`, `send_input`, and `stop_command`. The AI can provide the `executable` to run, an `args` list of command-line arguments, and an optional `cwd` working directory when calling `start_command`. The tool returns a session ID, which the AI uses to read output, send input, and stop the same running program. When `false` or omitted, these tools are disabled. |
 | `enable_shell_tool` | When `true`, enables the `run_shell` tool. When `false` or omitted, the tool is disabled. |
+| `enable_interactive_shell_tool` | When `true`, enables the `run_interactive_shell` tool. The AI can provide a shell script to run using the configured `shell_executable`. The tool returns a session ID, which the AI uses to read output, send input, and stop the same running process through `read_output`, `send_input`, and `stop_command`. When `false` or omitted, the tool is disabled. |
 | `shell_executable` | The shell ASTRA uses to run shell scripts. The default is `/bin/bash`. |
 | `audit_log` | The file where ASTRA adds audit records in JSON-lines format. By default, this is `./audit.jsonl`. ASTRA creates the parent folder if it does not already exist. |
 
@@ -187,6 +193,28 @@ When calling `start_command`, the AI can choose which program to run, provide it
 After starting a program, the AI uses the session ID to read its output, send input, and stop it when finished. This lets the AI continue working with the same running program across multiple tool calls.
 
 These tools are disabled by default. After enabling them in `tools.toml`, restart ASTRA to apply the change.
+
+### Optional interactive shell tool
+
+By default, the `run_interactive_shell` tool is disabled. To enable it, set `enable_interactive_shell_tool = true` in the `[server]` section of `tools.toml`.
+
+You can choose which shell ASTRA uses by setting `shell_executable` in `tools.toml`. The default is `/bin/bash`.
+
+When enabled, the MCP client is shown a `run_interactive_shell` tool that lets the AI run complete shell scripts. It supports shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), variables, and other shell syntax.
+
+Unlike `run_shell`, this tool runs the script in an interactive shell session and returns a session ID. The AI can use this ID to interact with the same running process through `read_output`, `send_input`, and `stop_command`.
+
+| Tool | Purpose |
+|---|---|
+| `read_output` | Reads output from the session and helps check whether the process has finished. |
+| `send_input` | Sends input to the running script, such as responding to a prompt. |
+| `stop_command` | Stops the process and releases its session resources. |
+
+This is useful for scripts and programs that require input while running, including interactive prompts, terminal menus, and terminal editors such as `nano`, `vi`, and `vim`.
+
+**Security note:** Shell scripts can run commands with the same operating-system permissions as ASTRA. They may read, change, or delete files that ASTRA's user can access. Enable this tool only if you trust the commands the AI may run.
+
+After enabling the tool in `tools.toml`, restart ASTRA to apply the change.
 
 ## 6. Configure tools in `tools.toml`
 
@@ -314,6 +342,8 @@ You can also enable the `run_command` tool by setting `enable_dynamic_command_to
 You can enable the `run_shell` tool by setting `enable_shell_tool = true` in the `[server]` section of `tools.toml`. This lets the AI run shell scripts without adding a separate `[[tools]]` entry. Set `shell_executable` to choose the shell ASTRA uses. Restart ASTRA after changing these settings.
 
 You can also enable the interactive command tools by setting `enable_interactive_command_tool = true` in the `[server]` section of `tools.toml`. When calling `start_command`, the AI can provide the `executable` to run, an `args` list containing its command-line arguments, and an optional `cwd` working directory. These tools let the AI start a program, read its output, send input to answer prompts, and stop the running process. The `start_command` tool returns a session ID, which the AI uses to interact with the same process through `read_output`, `send_input`, and `stop_command`. These tools are disabled by default. Restart ASTRA after changing this setting.
+
+You can also enable the `run_interactive_shell` tool by setting `enable_interactive_shell_tool = true` in the `[server]` section of `tools.toml`. This tool runs shell scripts in an interactive session using the configured `shell_executable`. It returns a session ID that the AI can use with `read_output`, `send_input`, and `stop_command` to interact with the same running process. Restart ASTRA after changing this setting.
 
 ## 10. Connect an MCP client
 

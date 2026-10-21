@@ -53,32 +53,38 @@ def create_server(config_path: str | Path | None = None) -> Server:
         ]
 
         if config.enable_interactive_command_tool:
+            tools.append(Tool(
+                name="start_command",
+                description=(
+                    "Start an opt-in interactive command session. when a command may ask "
+                    "one or more questions. Returns a session_id. Use read_output to inspect "
+                    "prompts and send_input to provide answers. Use stop_command to stop the "
+                    "session and release its associated resources."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "executable": {"type": "string", "description": "Executable name on PATH or absolute executable path."},
+                        "args": {"type": "array", "items": {"type": "string"}, "description": "Arguments, one string per argument."},
+                        "cwd": {"type": "string", "description": "Optional working directory."},
+                    },
+                    "required": ["executable", "args"],
+                    "additionalProperties": False,
+                },
+            ))
+
+        if config.enable_interactive_command_tool or config.enable_interactive_shell_tool:
             tools.extend([
                 Tool(
-                    name="start_command",
+                    name="read_output",
                     description=(
-                        "Start an opt-in interactive command session. when a command may ask "
-                        "one or more questions. Returns a session_id. Use read_output to inspect "
-                        "prompts and send_input to provide answers. This feature is controlled independently "
-                        "of generic run_command execution."
+                        "Read new output from an interactive command or interactive shell session "
+                        "and check whether it has finished. Accepts the session_id returned by "
+                        "start_command or run_interactive_shell."
                     ),
                     inputSchema={
                         "type": "object",
-                        "properties": {
-                            "executable": {"type": "string", "description": "Executable name on PATH or absolute executable path."},
-                            "args": {"type": "array", "items": {"type": "string"}, "description": "Arguments, one string per argument."},
-                            "cwd": {"type": "string", "description": "Optional working directory."},
-                        },
-                        "required": ["executable", "args"],
-                        "additionalProperties": False,
-                    },
-                ),
-                Tool(
-                    name="read_output",
-                    description="Read new output from an interactive command session and check whether it has finished.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command."}},
+                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."}},
                         "required": ["session_id"],
                         "additionalProperties": False,
                     },
@@ -86,15 +92,16 @@ def create_server(config_path: str | Path | None = None) -> Server:
                 Tool(
                     name="send_input",
                     description=(
-                        "Send arbitrary text input to a running interactive command session. "
+                        "Send arbitrary text input to a running interactive command or interactive shell session. "
                         "By default, appends a newline (Enter). Set append_newline=false for "
                         "raw terminal input without appending a newline. "
-                        "Do not send confirmations for consequential actions without user approval."
+                        "Do not send confirmations for consequential actions without user approval. "
+                        "Accepts the session_id returned by start_command or run_interactive_shell."
                     ),
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "session_id": {"type": "string", "description": "Session ID returned by start_command."},
+                            "session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."},
                             "text": {"type": "string", "description": "Text or terminal input to send."},
                             "append_newline": {"type": "boolean", "description": "Append Enter after the input (default true)."},
                         },
@@ -104,15 +111,44 @@ def create_server(config_path: str | Path | None = None) -> Server:
                 ),
                 Tool(
                     name="stop_command",
-                    description="Stop an interactive command session and release its resources.",
+                    description=(
+                        "Stop an interactive command or interactive shell session and release its resources. "
+                        "Accepts the session_id returned by start_command or run_interactive_shell."
+                    ),
                     inputSchema={
                         "type": "object",
-                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command."}},
+                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."}},
                         "required": ["session_id"],
                         "additionalProperties": False,
                     },
                 ),
             ])
+
+        if config.enable_interactive_shell_tool:
+            tools.append(Tool(
+                name="run_interactive_shell",
+                description=(
+                    "Execute a complete script using the configured shell. Supports shell syntax "
+                    "such as &&, ||, ;, pipes, redirection, variables, quoting, globbing, "
+                    "subshells, command substitution, loops, functions, and shell built-ins. "
+                    "This tool executes commands on the host system. "
+                    "Runs the script in an interactive shell session and returns a session_id. "
+                    "Use read_output to inspect output and prompts, send_input to provide input "
+                    "to the running script, and stop_command to stop the process and release "
+                    "its resources. The session can be interacted with while the process is running. "
+                    "After it finishes, use read_output to collect remaining output "
+                    "and stop_command to release session resources."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "script": {"type": "string", "description": "Full shell script to execute interactively."},
+                        "cwd": {"type": "string", "description": "Optional working directory."},
+                    },
+                    "required": ["script"],
+                    "additionalProperties": False,
+                },
+            ))
 
         if config.enable_dynamic_command_tool:
             tools.append(Tool(
@@ -161,10 +197,17 @@ def create_server(config_path: str | Path | None = None) -> Server:
             "read_output": executor.read_output,
             "send_input": executor.send_input,
             "stop_command": executor.stop_command,
+            "run_interactive_shell": executor.run_interactive_shell,
         }
         if name in interactive_methods:
-            if not config.enable_interactive_command_tool:
-                return [TextContent(type="text", text=json.dumps({"error": "Interactive command execution is disabled"}))]
+            if name == "run_interactive_shell":
+                if not config.enable_interactive_shell_tool:
+                    return [TextContent(type="text", text=json.dumps({"error": "Interactive shell execution is disabled"}))]
+            elif name == "start_command":
+                if not config.enable_interactive_command_tool:
+                    return [TextContent(type="text", text=json.dumps({"error": "Interactive command execution is disabled"}))]
+            elif not (config.enable_interactive_command_tool or config.enable_interactive_shell_tool):
+                return [TextContent(type="text", text=json.dumps({"error": "Interactive sessions are disabled"}))]
             try:
                 result = await interactive_methods[name](arguments)
                 return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
