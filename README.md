@@ -21,9 +21,9 @@ For configured tools, ASTRA reads the settings in `tools.toml` and creates an MC
 - Optionally enable `run_shell` so the AI can run shell scripts and combine commands.
 - Use shell features such as pipes (`|`), logical OR (`||`), redirects (`>`), command chaining (`&&`), and variables when using `run_shell`.
 - Choose which shell ASTRA uses with the `shell_executable` setting.
-- **Interactive command sessions:** Optionally enable `start_command`, `read_output`, `send_input`, and `stop_command` to start programs, read their output, send input, and stop running processes using session IDs.
+- **Interactive command sessions:** Optionally enable `start_command`, `read_output`, `send_input`, and `stop_command` so the AI can start programs, read their output, send input, and stop running processes using session IDs.
 - **Session management:** Keep interacting with a running process across multiple tool calls without restarting it.
-- **Interactive shell sessions:** Optionally enable `run_interactive_shell` to execute shell scripts that may need input while running. Use the returned session ID with `read_output`, `send_input`, and `stop_command` to interact with the same process.
+- **Interactive shell sessions:** `run_interactive_shell` allows the AI to execute shell scripts that may require input while running. Use the returned session ID with `read_output`, `send_input`, and `stop_command` to interact with the same process.
 - Show enabled tools to an AI client that supports MCP.
 - Create JSON schemas from the parameters you set for each tool.
 - Check required inputs, data types, unknown input names, and some unsafe characters.
