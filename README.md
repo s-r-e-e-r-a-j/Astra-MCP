@@ -48,10 +48,10 @@ Make sure your MCP client starts ASTRA using the executable from the Python envi
 
 ## Compatibility
 
-Choose the Astra-MCP version that matches your Python SDK version to avoid compatibility issues.
+Choose the Astra-MCP version that matches your MCP Python SDK version to avoid compatibility issues.
 
-- **Python SDK `< 2.0.0`:** Use `Astra-MCP v1.3.0-Stable`, compatible with older SDK versions.
-- **Python SDK `>= 2.0.0, < 3.0.0`:** Use `Astra-MCP v1.4.0-Stable`, which supports the newer SDK 2.x series.
+- **MCP Python SDK `< 2.0.0`:** Use `Astra-MCP v1.3.0-Stable`, compatible with SDK 1.x.x clients.
+- **MCP Python SDK `>= 2.0.0, < 3.0.0`:** Use `Astra-MCP v1.4.0-Stable`, compatible with SDK 2.x.x clients.
 
 ## 1. Get the project
 
