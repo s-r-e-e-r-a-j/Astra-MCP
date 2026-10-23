@@ -46,6 +46,13 @@ For configured tools, ASTRA reads the settings in `tools.toml` and creates an MC
 
 Make sure your MCP client starts ASTRA using the executable from the Python environment where ASTRA is installed.
 
+## Compatibility
+
+Choose the Astra-MCP version that matches your Python SDK version to avoid compatibility issues.
+
+- **Python SDK `< 2.0.0`:** Use `Astra-MCP v1.3.0-Stable`, compatible with older SDK versions.
+- **Python SDK `>= 2.0.0, < 3.0.0`:** Use `Astra-MCP v1.4.0-Stable`, which supports the newer SDK 2.x series.
+
 ## 1. Get the project
 
 ```bash

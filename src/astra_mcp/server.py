@@ -7,9 +7,16 @@ import asyncio
 import json
 from pathlib import Path
 
-from mcp.server import Server
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+    Tool,
+)
 
 from astra_mcp import __version__
 from astra_mcp.config import ToolConfig, config_path_from_environment, load_config
@@ -42,12 +49,12 @@ def create_server(config_path: str | Path | None = None) -> Server:
     path = Path(config_path) if config_path else config_path_from_environment()
     config = load_config(path)
     executor = ToolExecutor(config)
-    server = Server("astra-mcp")
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
+    async def list_tools(
+        ctx: ServerRequestContext,
+        params: PaginatedRequestParams | None,
+    ) -> ListToolsResult:
         tools = [
-            Tool(name=tool.name, description=tool.description, inputSchema=json_schema(tool))
+            Tool(name=tool.name, description=tool.description, input_schema=json_schema(tool))
             for tool in config.tools
             if tool.enabled
         ]
@@ -61,7 +68,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "prompts and send_input to provide answers. Use stop_command to stop the "
                     "session and release its associated resources."
                 ),
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "executable": {"type": "string", "description": "Executable name on PATH or absolute executable path."},
@@ -82,7 +89,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                         "and check whether it has finished. Accepts the session_id returned by "
                         "start_command or run_interactive_shell."
                     ),
-                    inputSchema={
+                    input_schema={
                         "type": "object",
                         "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."}},
                         "required": ["session_id"],
@@ -98,7 +105,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                         "Do not send confirmations for consequential actions without user approval. "
                         "Accepts the session_id returned by start_command or run_interactive_shell."
                     ),
-                    inputSchema={
+                    input_schema={
                         "type": "object",
                         "properties": {
                             "session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."},
@@ -115,7 +122,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                         "Stop an interactive command or interactive shell session and release its resources. "
                         "Accepts the session_id returned by start_command or run_interactive_shell."
                     ),
-                    inputSchema={
+                    input_schema={
                         "type": "object",
                         "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."}},
                         "required": ["session_id"],
@@ -139,7 +146,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "After it finishes, use read_output to collect remaining output "
                     "and stop_command to release session resources."
                 ),
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "script": {"type": "string", "description": "Full shell script to execute interactively."},
@@ -158,7 +165,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "Pass the executable separately and every argument as one string in args. "
                     "Arguments are passed directly without shell parsing."
                 ),
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "executable": {"type": "string", "description": "Executable name on PATH or absolute executable path."},
@@ -178,7 +185,7 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "subshells, command substitution, loops, functions, and shell built-ins. "
                     "This tool executes commands on the host system."
                 ),
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "script": {"type": "string", "description": "Full shell script to execute."},
@@ -188,10 +195,14 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "additionalProperties": False,
                 },
             ))
-        return tools
+        return ListToolsResult(tools=tools)
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, object]) -> list[TextContent]:
+    async def call_tool(
+        ctx: ServerRequestContext,
+        params: CallToolRequestParams,
+    ) -> CallToolResult:
+        name = params.name
+        arguments = params.arguments or {}
         interactive_methods = {
             "start_command": executor.start_command,
             "read_output": executor.read_output,
@@ -202,43 +213,47 @@ def create_server(config_path: str | Path | None = None) -> Server:
         if name in interactive_methods:
             if name == "run_interactive_shell":
                 if not config.enable_interactive_shell_tool:
-                    return [TextContent(type="text", text=json.dumps({"error": "Interactive shell execution is disabled"}))]
+                    return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive shell execution is disabled"}))])
             elif name == "start_command":
                 if not config.enable_interactive_command_tool:
-                    return [TextContent(type="text", text=json.dumps({"error": "Interactive command execution is disabled"}))]
+                    return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive command execution is disabled"}))])
             elif not (config.enable_interactive_command_tool or config.enable_interactive_shell_tool):
-                return [TextContent(type="text", text=json.dumps({"error": "Interactive sessions are disabled"}))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive sessions are disabled"}))])
             try:
                 result = await interactive_methods[name](arguments)
-                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, ensure_ascii=False))])
             except Exception as error:
-                return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))])
         if name == "run_shell":
             if not config.enable_shell_tool:
-                return [TextContent(type="text", text=json.dumps({"error": "Shell execution is disabled"}))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Shell execution is disabled"}))])
             try:
                 result = await executor.run_shell(arguments)
-                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, ensure_ascii=False))])
             except Exception as error:
-                return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))])
         if name == "run_command":
             if not config.enable_dynamic_command_tool:
-                return [TextContent(type="text", text=json.dumps({"error": "Dynamic command execution is disabled"}))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Dynamic command execution is disabled"}))])
             try:
                 result = await executor.run_dynamic(arguments)
-                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, ensure_ascii=False))])
             except Exception as error:
-                return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
+                return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))])
         tool = next((item for item in config.tools if item.name == name), None)
         if tool is None:
-            return [TextContent(type="text", text=json.dumps({"error": "Unknown tool"}))]
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Unknown tool"}))])
         try:
             result = await executor.run(tool, arguments)
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(result, ensure_ascii=False))])
         except Exception as error:
-            return [TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))]
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": str(error), "type": type(error).__name__}))])
 
-    return server
+    return Server(
+        "astra-mcp",
+        on_list_tools=list_tools,
+        on_call_tool=call_tool,
+    )
 
 
 async def _run(config_path: str | Path | None = None) -> None:
