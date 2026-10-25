@@ -33,6 +33,10 @@ For configured tools, ASTRA reads the settings in `tools.toml` and creates an MC
 - Limit how much output ASTRA returns.
 - Save records of tool calls in a JSON-lines audit log.
 - Limit working directories and certain path placeholders. You can also allow only selected URL or target hosts when you configure them.
+- **Dual transport support:** Supports the standard stdio transport and Streamable HTTP through the optional ASTRA bridge.
+- **Streamable HTTP endpoint:** Exposes the MCP server over HTTP at `/mcp`, using `http://127.0.0.1:8000/mcp` by default.
+- **Optional HTTP bridge:** Runs ASTRA as a subprocess and provides an HTTP interface for MCP clients that require Streamable HTTP transport.
+- **Host security:** Uses MCP transport host validation with DNS rebinding protection enabled.
 - Choose the configuration file and audit-log file with environment variables.
 - Use `astra --help`, `astra --version`, and `astra --config`.
 
