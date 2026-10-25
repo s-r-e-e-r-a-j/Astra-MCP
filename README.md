@@ -416,16 +416,64 @@ export ASTRA_MCP_CONFIG='/absolute/path/to/tools.toml'
 python astra_bridge.py
 ```
 
-Configure your tools and settings in `tools.toml` as described in the obove sections of this README.
+Configure your tools and settings in `tools.toml` as described in the above sections of this README.
+
 
 ### Expose the Bridge Through a Tunnel (Optional)
 
-If your MCP client needs remote access, you can use a tunnel client to expose the local bridge.
+If your MCP client needs remote access, you can expose the local bridge using a tunneling service such as Cloudflare Tunnel (`cloudflared`), ngrok, or a VPS configured for remote access.
 
-1. Start the bridge on your computer.
-2. Configure your tunnel client to forward traffic to the bridge's local port.
-3. Copy the tunnel's public HTTP or HTTPS URL into `tunnel_url.txt`, located in the same directory as `astra_bridge.py`.
-4. Configure your remote MCP client to use the tunnel URL with `/mcp` appended.
+**Note:** The tunnel client is a separate program. Its installation and configuration depend on the provider you choose. Install and configure your preferred tunneling service before proceeding.
+
+**1. Start the bridge — Terminal 1**
+
+```bash
+python astra_bridge.py
+```
+
+Uvicorn starts the server and prints its local address, by default:
+
+```text
+http://127.0.0.1:8000
+```
+
+Keep this terminal running.
+
+**2. Start the tunnel — Terminal 2**
+
+Open a second terminal and start your preferred tunneling service.
+
+With Cloudflare Tunnel:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+With ngrok:
+
+```bash
+ngrok http http://127.0.0.1:8000
+```
+
+Copy the public HTTP or HTTPS URL displayed by the tunneling service. Keep this terminal running too.
+
+**3. Update `tunnel_url.txt` — Terminal 3**
+
+Open a third terminal and navigate to the directory containing `astra_bridge.py` and `tunnel_url.txt`.
+
+When downloaded fresh from GitHub, `tunnel_url.txt` is empty. Open it in a text editor, paste the public URL provided by your tunneling service, and save the file.
+
+For example, the file should contain only the URL:
+
+```text
+https://your-tunnel.example
+```
+
+Do not append `/mcp` to the URL in this file.
+
+**4. Configure your remote MCP client**
+
+Configure your remote MCP client to use the tunnel URL with `/mcp` appended.
 
 For example, if the tunnel URL is `https://your-tunnel.example`, the MCP endpoint is:
 
@@ -435,7 +483,9 @@ https://your-tunnel.example/mcp
 
 The bridge checks `tunnel_url.txt` periodically and updates its allowed-host list when the URL changes. This supports temporary tunnel URLs and stable custom domains without restarting the bridge.
 
-The tunnel client is a separate program. Its installation and configuration depend on the provider you choose.
+If you selected a different bridge port, use that port in your tunnel configuration.
+
+A VPS can also be used for remote access if configured to forward requests to the bridge.
 
 ## License
 This project is licensed under the MIT License
