@@ -371,9 +371,9 @@ If your MCP client supports Streamable HTTP and you prefer to connect through an
 
 ## 11. Optional Streamable HTTP Bridge
 
-ASTRA uses MCP stdio transport by default. If your MCP client supports Streamable HTTP but cannot launch a local stdio server, you can use an optional bridge to expose ASTRA through an HTTP endpoint.
+ASTRA uses MCP stdio transport by default. If your MCP client supports Streamable HTTP but cannot launch a local stdio server, you can use the optional bridge to expose ASTRA through an HTTP endpoint.
 
-The bridge starts ASTRA as a subprocess, connects to it over stdio, and forwards MCP tool-listing and tool-call requests over Streamable HTTP. ASTRA's existing `tools.toml` configuration and tool permissions continue to apply.
+The bridge starts ASTRA as a subprocess, connects to it over stdio, and forwards MCP tool-listing and tool-call requests over Streamable HTTP. ASTRA's existing `tools.toml` configuration and tool permissions continue to apply, provided ASTRA loads the intended configuration.
 
 ### Requirements
 
