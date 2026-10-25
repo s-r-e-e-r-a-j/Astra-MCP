@@ -51,7 +51,7 @@ Make sure your MCP client starts ASTRA using the executable from the Python envi
 Choose the Astra-MCP version that matches your MCP Python SDK version to avoid compatibility issues.
 
 - **MCP Python SDK `< 2.0.0`:** Use `Astra-MCP v1.3.0-Stable`, compatible with SDK 1.x.x clients.
-- **MCP Python SDK `>= 2.0.0, < 3.0.0`:** Use `Astra-MCP v1.4.0-Stable`, compatible with SDK 2.x.x clients.
+- **MCP Python SDK `>= 2.0.0, < 3.0.0`:** Use `Astra-MCP v1.4.0-Stable` or `Astra-MCP v1.5.0-Stable`, compatible with SDK 2.x.x clients. `Astra-MCP v1.5.0-Stable` additionally supports the optional Streamable HTTP bridge for clients connecting over HTTP.
 
 ## 1. Get the project
 
@@ -366,6 +366,76 @@ ASTRA uses stdio, so your MCP client must start the ASTRA executable. The exact 
 For example, the command could be `/absolute/path/to/project/.venv/bin/astra`. Replace this example with the actual path on your computer.
 
 A tunnel client is a separate program from ASTRA. Its profile, login details, and connection settings depend on the tunnel-client product you use. You do not configure those settings in `tools.toml`.
+
+If your MCP client supports Streamable HTTP and you prefer to connect through an HTTP endpoint instead of launching ASTRA directly over stdio, see [Section 11: Optional Streamable HTTP Bridge](#11-optional-streamable-http-bridge).
+
+## 11. Optional Streamable HTTP Bridge
+
+ASTRA uses MCP stdio transport by default. If your MCP client supports Streamable HTTP but cannot launch a local stdio server, you can use an optional bridge to expose ASTRA through an HTTP endpoint.
+
+The bridge starts ASTRA as a subprocess, connects to it over stdio, and forwards MCP tool-listing and tool-call requests over Streamable HTTP. ASTRA's existing `tools.toml` configuration and tool permissions continue to apply.
+
+### Requirements
+
+- ASTRA installed and accessible from the environment running the bridge.
+- An HTTP-capable MCP client.
+- Optionally, a tunnel client for remote access.
+
+### Start the Bridge
+
+The bridge script is named `astra_bridge.py`.
+
+Start the bridge using the default port:
+
+```bash
+python astra_bridge.py
+```
+
+By default, the bridge listens on `127.0.0.1:8000`. To select another port:
+
+```bash
+python astra_bridge.py --port 9000
+```
+
+The MCP endpoint is:
+
+```text
+http://127.0.0.1:8000/mcp
+```
+
+Use the port you selected if it differs from `8000`.
+
+### Configure ASTRA
+
+The bridge passes the `ASTRA_MCP_CONFIG` environment variable to ASTRA when it is set. Otherwise, ASTRA uses its normal configuration-file discovery behavior.
+
+For example:
+
+```bash
+export ASTRA_MCP_CONFIG='/absolute/path/to/tools.toml'
+python astra_bridge.py
+```
+
+Configure your tools and settings in `tools.toml` as described in the obove sections of this README.
+
+### Expose the Bridge Through a Tunnel (Optional)
+
+If your MCP client needs remote access, you can use a tunnel client to expose the local bridge.
+
+1. Start the bridge on your computer.
+2. Configure your tunnel client to forward traffic to the bridge's local port.
+3. Copy the tunnel's public HTTP or HTTPS URL into `tunnel_url.txt`, located in the same directory as `astra_bridge.py`.
+4. Configure your remote MCP client to use the tunnel URL with `/mcp` appended.
+
+For example, if the tunnel URL is `https://your-tunnel.example`, the MCP endpoint is:
+
+```text
+https://your-tunnel.example/mcp
+```
+
+The bridge checks `tunnel_url.txt` periodically and updates its allowed-host list when the URL changes. This supports temporary tunnel URLs and stable custom domains without restarting the bridge.
+
+The tunnel client is a separate program. Its installation and configuration depend on the provider you choose.
 
 ## License
 This project is licensed under the MIT License
