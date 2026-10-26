@@ -57,7 +57,7 @@ Make sure your MCP client starts ASTRA using the executable from the Python envi
 Choose the Astra-MCP version that matches your MCP Python SDK version to avoid compatibility issues.
 
 - **MCP Python SDK `< 2.0.0`:** Use `Astra-MCP v1.3.0-Stable`, compatible with SDK 1.x.x clients.
-- MCP Python SDK `>= 2.0.0`, `< 3.0.0`: Use `Astra-MCP v1.4.0-Stable` or `Astra-MCP v1.5.0-Stable`, compatible with SDK `2.x.x` clients. `Astra-MCP v1.5.0-Stable` additionally supports the optional Streamable HTTP bridge for clients connecting over HTTP and introduces the optional `run_interactive_script` tool for executing interactive and non-interactive scripts in Python, Ruby, JavaScript (Node.js), Perl, Bash, C, and C++, with automatic compilation of C and C++ source code.
+- **MCP Python SDK `>= 2.0.0, < 3.0.0`:** Use `Astra-MCP v1.4.0-Stable` or `Astra-MCP v1.5.0-Stable`, compatible with SDK `2.x.x` clients. `Astra-MCP v1.5.0-Stable` additionally supports the optional Streamable HTTP bridge for clients connecting over HTTP and introduces the optional `run_interactive_script` tool for executing interactive and non-interactive scripts in Python, Ruby, JavaScript (Node.js), Perl, Bash, C, and C++, with automatic compilation of C and C++ source code.
 
 ## 1. Get the project
 
