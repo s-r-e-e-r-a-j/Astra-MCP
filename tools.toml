@@ -7,6 +7,7 @@ enable_dynamic_command_tool = false
 enable_interactive_command_tool = false
 enable_shell_tool = false
 enable_interactive_shell_tool = false
+enable_interactive_script_tool = false
 shell_executable = "/bin/bash"
 audit_log = "./audit.jsonl"
 

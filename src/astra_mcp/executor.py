@@ -7,6 +7,7 @@ import secrets
 import shutil
 import signal
 import time
+import tempfile
 from pathlib import Path
 import pty
 import fcntl
@@ -23,8 +24,8 @@ class ToolExecutor:
         self._interactive_sessions: dict[str, dict[str, object]] = {}
         self._interactive_session_limit = max(1, min(config.max_concurrency, 32))
 
-    async def start_command(self, raw_arguments: object) -> dict[str, object]:
-        if not self.config.enable_interactive_command_tool:
+    async def start_command(self, raw_arguments: object, *, _allow_script: bool = False) -> dict[str, object]:
+        if not self.config.enable_interactive_command_tool and not (_allow_script and self.config.enable_interactive_script_tool):
             raise PermissionError("Interactive command execution is disabled in tools.toml")
         if not isinstance(raw_arguments, dict):
             raise ValueError("Arguments must be an object")
@@ -96,6 +97,65 @@ class ToolExecutor:
             "executable": executable_value, "args": args_value, "cwd": cwd,
         })
         return {"session_id": session_id, "status": "running", "message": "Use read_output to inspect output and send_input to answer prompts."}
+
+    async def run_interactive_script(self, raw_arguments: object) -> dict[str, object]:
+        if not self.config.enable_interactive_script_tool:
+            raise PermissionError("Interactive script execution is disabled in tools.toml")
+        if not isinstance(raw_arguments, dict) or set(raw_arguments) - {"language", "script", "cwd"}:
+            raise ValueError("Only language, script, and cwd are accepted")
+        language, script, cwd = raw_arguments.get("language"), raw_arguments.get("script"), raw_arguments.get("cwd")
+        supported = {"python", "ruby", "javascript", "perl", "bash", "c", "cpp"}
+        if language not in supported:
+            raise ValueError("language must be one of: python, ruby, javascript, perl, bash, c, cpp")
+        if not isinstance(script, str) or not script.strip():
+            raise ValueError("script must be a non-empty string")
+        if "\x00" in script:
+            raise ValueError("script cannot contain NUL characters")
+        if cwd is not None and not isinstance(cwd, str):
+            raise ValueError("cwd must be a string when provided")
+
+        temp_dir = tempfile.TemporaryDirectory(prefix="astra-script-")
+        root = Path(temp_dir.name)
+        suffixes = {"python": ".py", "ruby": ".rb", "javascript": ".js", "perl": ".pl", "bash": ".sh", "c": ".c", "cpp": ".cpp"}
+        source_path = root / ("program" + suffixes[language])
+        source_path.write_text(script, encoding="utf-8")
+        try:
+            if language == "python": executable, args = "python3", ["-u", str(source_path)]
+            elif language == "ruby": executable, args = "ruby", [str(source_path)]
+            elif language == "javascript": executable, args = "node", [str(source_path)]
+            elif language == "perl": executable, args = "perl", [str(source_path)]
+            elif language == "bash": executable, args = self.config.shell_executable, [str(source_path)]
+            else:
+                compiler = "cc" if language == "c" else "c++"
+                resolved_compiler = shutil.which(compiler)
+                if not resolved_compiler:
+                    raise FileNotFoundError(f"Required compiler not found: {compiler}")
+                binary_path = root / "program"
+                compile_process = await asyncio.create_subprocess_exec(
+                    resolved_compiler, str(source_path), "-o", str(binary_path),
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                )
+                try:
+                    compile_output, _ = await asyncio.wait_for(compile_process.communicate(), timeout=min(self.config.max_timeout_seconds, 60))
+                except TimeoutError:
+                    compile_process.kill(); await compile_process.wait()
+                    raise TimeoutError("Compilation timed out")
+                if compile_process.returncode != 0:
+                    raise RuntimeError("Compilation failed:\n" + compile_output.decode("utf-8", errors="replace")[-12000:])
+                executable, args = str(binary_path), []
+
+            result = await self.start_command({"executable": executable, "args": args, "cwd": cwd}, _allow_script=True)
+            session = self._interactive_sessions[result["session_id"]]
+            session["temporary_directory"] = temp_dir
+            session["script_language"] = language
+            write_audit(self.config.audit_log, {"tool": "run_interactive_script", "session_id": result["session_id"], "language": language, "source_bytes": len(script.encode("utf-8")), "cwd": cwd})
+            result["tool"] = "run_interactive_script"
+            result["language"] = language
+            result["message"] = f"{language} script started in an interactive terminal. Use read_output, send_input, and stop_command with this session_id."
+            return result
+        except Exception:
+            temp_dir.cleanup()
+            raise
 
     async def run_interactive_shell(self, raw_arguments: object) -> dict[str, object]:
         if not self.config.enable_interactive_shell_tool:
@@ -314,6 +374,9 @@ class ToolExecutor:
             os.close(int(session["master_fd"]))
         except OSError:
             pass
+        temporary_directory = session.get("temporary_directory")
+        if isinstance(temporary_directory, tempfile.TemporaryDirectory):
+            temporary_directory.cleanup()
         write_audit(self.config.audit_log, {"tool": "stop_command", "session_id": session_id, "exit_code": process.returncode})
         return {"session_id": session_id, "status": "stopped", "exit_code": process.returncode}
 

@@ -80,18 +80,19 @@ def create_server(config_path: str | Path | None = None) -> Server:
                 },
             ))
 
-        if config.enable_interactive_command_tool or config.enable_interactive_shell_tool:
+        if config.enable_interactive_command_tool or config.enable_interactive_shell_tool or config.enable_interactive_script_tool:
             tools.extend([
                 Tool(
                     name="read_output",
                     description=(
-                        "Read new output from an interactive command or interactive shell session "
-                        "and check whether it has finished. Accepts the session_id returned by "
-                        "start_command or run_interactive_shell."
+                        "Read new output from an interactive command, interactive shell, or interactive "
+                        "script session and check whether it has finished. "
+                        "Accepts the session_id returned by start_command, run_interactive_shell, "
+                        "or run_interactive_script."
                     ),
                     input_schema={
                         "type": "object",
-                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."}},
+                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command, run_interactive_shell, or run_interactive_script."}},
                         "required": ["session_id"],
                         "additionalProperties": False,
                     },
@@ -99,16 +100,18 @@ def create_server(config_path: str | Path | None = None) -> Server:
                 Tool(
                     name="send_input",
                     description=(
-                        "Send arbitrary text input to a running interactive command or interactive shell session. "
+                        "Send arbitrary text input to a running interactive command, interactive shell, "
+                        "or interactive script session. "
                         "By default, appends a newline (Enter). Set append_newline=false for "
                         "raw terminal input without appending a newline. "
                         "Do not send confirmations for consequential actions without user approval. "
-                        "Accepts the session_id returned by start_command or run_interactive_shell."
+                        "Accepts the session_id returned by start_command, run_interactive_shell, "
+                        "or run_interactive_script."
                     ),
                     input_schema={
                         "type": "object",
                         "properties": {
-                            "session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."},
+                            "session_id": {"type": "string", "description": "Session ID returned by start_command, run_interactive_shell, or run_interactive_script."},
                             "text": {"type": "string", "description": "Text or terminal input to send."},
                             "append_newline": {"type": "boolean", "description": "Append Enter after the input (default true)."},
                         },
@@ -119,12 +122,15 @@ def create_server(config_path: str | Path | None = None) -> Server:
                 Tool(
                     name="stop_command",
                     description=(
-                        "Stop an interactive command or interactive shell session and release its resources. "
-                        "Accepts the session_id returned by start_command or run_interactive_shell."
+                        "Stop an interactive command, interactive shell, or interactive script session "
+                        "and release its resources. "
+                        "Accepts the session_id returned by start_command, run_interactive_shell, "
+                        "or run_interactive_script."
+
                     ),
                     input_schema={
                         "type": "object",
-                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command or run_interactive_shell."}},
+                        "properties": {"session_id": {"type": "string", "description": "Session ID returned by start_command, run_interactive_shell, or run_interactive_script."}},
                         "required": ["session_id"],
                         "additionalProperties": False,
                     },
@@ -155,6 +161,23 @@ def create_server(config_path: str | Path | None = None) -> Server:
                     "required": ["script"],
                     "additionalProperties": False,
                 },
+            ))
+
+        if config.enable_interactive_script_tool:
+            tools.append(Tool(
+                name="run_interactive_script",
+                description=(
+                    "Run complete Python, Ruby, JavaScript (Node.js), Perl, Bash, C, or C++ source code "
+                    "in an interactive PTY-backed session. C/C++ source code is compiled first. "
+                    "Returns a session_id. Use read_output to inspect output and prompts, "
+                    "send_input to provide input to the running script, and stop_command to "
+                    "stop the process and release its resources."
+                ),
+                input_schema={"type": "object", "properties": {
+                    "language": {"type": "string", "enum": ["python", "ruby", "javascript", "perl", "bash", "c", "cpp"]},
+                    "script": {"type": "string", "description": "Complete source code to execute."},
+                    "cwd": {"type": "string", "description": "Optional working directory."}},
+                    "required": ["language", "script"], "additionalProperties": False},
             ))
 
         if config.enable_dynamic_command_tool:
@@ -209,15 +232,19 @@ def create_server(config_path: str | Path | None = None) -> Server:
             "send_input": executor.send_input,
             "stop_command": executor.stop_command,
             "run_interactive_shell": executor.run_interactive_shell,
+            "run_interactive_script": executor.run_interactive_script,
         }
         if name in interactive_methods:
-            if name == "run_interactive_shell":
+            if name == "run_interactive_script":
+                if not config.enable_interactive_script_tool:
+                    return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive script execution is disabled"}))])
+            elif name == "run_interactive_shell":
                 if not config.enable_interactive_shell_tool:
                     return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive shell execution is disabled"}))])
             elif name == "start_command":
                 if not config.enable_interactive_command_tool:
                     return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive command execution is disabled"}))])
-            elif not (config.enable_interactive_command_tool or config.enable_interactive_shell_tool):
+            elif not (config.enable_interactive_command_tool or config.enable_interactive_shell_tool or config.enable_interactive_script_tool):
                 return CallToolResult(content=[TextContent(type="text", text=json.dumps({"error": "Interactive sessions are disabled"}))])
             try:
                 result = await interactive_methods[name](arguments)
@@ -265,7 +292,7 @@ async def _run(config_path: str | Path | None = None) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="astra",
-        description="ASTRA MCP configuration-driven command-line tool server",
+        description="ASTRA MCP: A configuration-driven Model Context Protocol server for Linux that executes command-line tools and shell scripts, supports interactive shell sessions, and runs interactive scripts in multiple programming languages.",
     )
     parser.add_argument(
         "--config",

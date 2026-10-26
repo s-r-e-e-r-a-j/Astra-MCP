@@ -39,6 +39,7 @@ class ServerConfig:
     enable_interactive_command_tool: bool
     enable_shell_tool: bool
     enable_interactive_shell_tool: bool
+    enable_interactive_script_tool: bool
     shell_executable: str
     audit_log: str
     tools: tuple[ToolConfig, ...]
@@ -127,6 +128,7 @@ def load_config(path: str | Path) -> ServerConfig:
         enable_interactive_command_tool=bool(server.get("enable_interactive_command_tool", False)),
         enable_shell_tool=bool(server.get("enable_shell_tool", False)),
         enable_interactive_shell_tool=bool(server.get("enable_interactive_shell_tool", False)),
+        enable_interactive_script_tool=bool(server.get("enable_interactive_script_tool", False)),
         shell_executable=str(server.get("shell_executable", "/bin/bash")),
         audit_log=os.environ.get("ASTRA_MCP_AUDIT_LOG", str(server.get("audit_log", "./audit.jsonl"))),
         tools=tuple(tools),
