@@ -49,6 +49,7 @@ For configured tools, ASTRA reads the settings in `tools.toml` and creates an MC
 - The command-line programs you want ASTRA to run
 - An MCP-compatible client
 - An internet connection to install Python packages, unless the packages are already available
+- The optional `run_interactive_script` tool requires the appropriate language runtimes, interpreters, and compilers to be installed on the system. C and C++ scripts are compiled automatically before execution.
 
 Make sure your MCP client starts ASTRA using the executable from the Python environment where ASTRA is installed.
 
@@ -87,6 +88,8 @@ Check that ASTRA is installed by running:
 astra --help
 astra --version
 ```
+
+> **Note:** Complete the ASTRA installation first, as it is required before starting the Streamable HTTP bridge. Read all sections of this README before Section 11 to understand how ASTRA works and how to configure it. If your MCP client supports Streamable HTTP and you prefer to connect through an HTTP endpoint instead of launching ASTRA directly over stdio, read [Section 11: Optional Streamable HTTP Bridge](#11-optional-streamable-http-bridge) and follow all the instructions before starting the bridge.
 
 ## 3. Choose the configuration file
 
