@@ -49,7 +49,7 @@ For configured tools, ASTRA reads the settings in `tools.toml` and creates an MC
 - The command-line programs you want ASTRA to run
 - An MCP-compatible client
 - An internet connection to install Python packages, unless the packages are already available
-- The optional `run_interactive_script` tool requires the appropriate language runtimes, interpreters, and compilers to be installed on the system. C and C++ scripts are compiled automatically before execution.
+- The optional `run_interactive_script` tool requires the appropriate language runtimes and interpreters to be installed on the system. For C and C++ scripts, the corresponding compilers must be installed on the system and accessible through the `cc` and `c++` commands. ASTRA automatically compiles C and C++ scripts before executing them.
 
 Make sure your MCP client starts ASTRA using the executable from the Python environment where ASTRA is installed.
 
