@@ -124,7 +124,7 @@ class ToolExecutor:
             elif language == "ruby": executable, args = "ruby", [str(source_path)]
             elif language == "javascript": executable, args = "node", [str(source_path)]
             elif language == "perl": executable, args = "perl", [str(source_path)]
-            elif language == "bash": executable, args = self.config.shell_executable, [str(source_path)]
+            elif language == "bash": executable, args = "bash", [str(source_path)]
             else:
                 compiler = "cc" if language == "c" else "c++"
                 resolved_compiler = shutil.which(compiler)
